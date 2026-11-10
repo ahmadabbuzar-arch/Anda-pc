@@ -4,42 +4,51 @@ name: Build ANDA CART Windows
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Extract Part 1
-        run: Expand-Archive ANDA-CART-Part-1.zip part1
+        shell: pwsh
+        run: Expand-Archive -Path "ANDA-CART-Part-1.zip" -DestinationPath "part1" -Force
 
       - name: Extract Part 2
-        run: Expand-Archive ANDA-CART-Part-2.zip part2
+        shell: pwsh
+        run: Expand-Archive -Path "ANDA-CART-Part-2.zip" -DestinationPath "part2" -Force
 
       - name: Restore project files
         shell: pwsh
         run: |
-          Copy-Item part1/* . -Recurse -Force
+          Copy-Item "part1/*" "." -Recurse -Force
 
       - name: Join HTML parts
         shell: cmd
         run: |
           copy /b part1\game-src\game-part-1.bin+part2\game-src\game-part-2.bin game-src\Anda_Cart_PC__1__2.html
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
       - name: Install dependencies
         run: npm install
 
-      - name: Build EXE
-        run: npm run build
+      - name: Build Windows EXE
+        run: npm run build -- --publish never
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Windows EXE
+        uses: actions/upload-artifact@v4
         with:
           name: ANDA-CART-Windows
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+          if-no-files-found: error
+          retention-days: 7
