@@ -12,7 +12,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -20,35 +20,91 @@ jobs:
         with:
           node-version: 22
 
+      - name: Check ZIP Files
+        shell: pwsh
+        run: |
+          Write-Host "Repository files:"
+          Get-ChildItem -Force
+
+          if (!(Test-Path "ANDA-CART-Part-1.zip")) {
+            throw "Part 1 ZIP missing"
+          }
+
+          if (!(Test-Path "ANDA-CART-Part-2.zip")) {
+            throw "Part 2 ZIP missing"
+          }
+
       - name: Extract Part 1
         shell: pwsh
-        run: Expand-Archive -Path "ANDA-CART-Part-1.zip" -DestinationPath "part1" -Force
+        run: |
+          Expand-Archive `
+            -Path "ANDA-CART-Part-1.zip" `
+            -DestinationPath "part1" -Force
 
       - name: Extract Part 2
         shell: pwsh
-        run: Expand-Archive -Path "ANDA-CART-Part-2.zip" -DestinationPath "part2" -Force
+        run: |
+          Expand-Archive `
+            -Path "ANDA-CART-Part-2.zip" `
+            -DestinationPath "part2" -Force
 
-      - name: Restore project files
+      - name: Restore Project Files
         shell: pwsh
         run: |
-          Copy-Item "part1/*" "." -Recurse -Force
+          Get-ChildItem -LiteralPath "part1" -Force |
+            Copy-Item -Destination "." -Recurse -Force
 
-      - name: Join HTML parts
-        shell: cmd
+      - name: Join HTML Parts
+        shell: pwsh
         run: |
-          copy /b part1\game-src\game-part-1.bin+part2\game-src\game-part-2.bin game-src\Anda_Cart_PC__1__2.html
+          $first = "part1/game-src/game-part-1.bin"
+          $second = "part2/game-src/game-part-2.bin"
+          $output = "game-src/Anda_Cart_PC__1__2.html"
 
-      - name: Install dependencies
+          if (!(Test-Path $first)) {
+            throw "First HTML part missing"
+          }
+
+          if (!(Test-Path $second)) {
+            throw "Second HTML part missing"
+          }
+
+          $a = [System.IO.File]::ReadAllBytes($first)
+          $b = [System.IO.File]::ReadAllBytes($second)
+
+          $combined = New-Object byte[] ($a.Length + $b.Length)
+
+          [Array]::Copy($a, 0, $combined, 0, $a.Length)
+          [Array]::Copy($b, 0, $combined, $a.Length, $b.Length)
+
+          [System.IO.File]::WriteAllBytes($output, $combined)
+
+          Write-Host "HTML successfully joined."
+          Write-Host "Total bytes: $($combined.Length)"
+
+      - name: Verify Project
+        shell: pwsh
+        run: |
+          if (!(Test-Path "package.json")) {
+            throw "package.json missing"
+          }
+
+          if (!(Test-Path "game-src/Anda_Cart_PC__1__2.html")) {
+            throw "Game HTML missing"
+          }
+
+      - name: Install Dependencies
         run: npm install
 
       - name: Build Windows EXE
         run: npm run build -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Upload Windows EXE
         uses: actions/upload-artifact@v4
         with:
           name: ANDA-CART-Windows
-          path: |
-            dist/*.exe
+          path: dist/*.exe
           if-no-files-found: error
           retention-days: 7
